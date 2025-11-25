@@ -15,9 +15,14 @@ import useScanStore from './store';
 const API_BASE = `http://${window.location.hostname}:3001/api`;
 
 interface ScanResult {
-  status: 'safe' | 'unsafe' | 'scanning';
-  threats: { type: string; details: string }[];
-  stats: { threatsFound: number };
+  status: 'safe' | 'unsafe' | 'suspicious' | 'scanning';
+  threats: { type: string; details: string; severity: string }[];
+  stats: { 
+    threatsFound: number;
+    malicious: number;
+    suspicious: number;
+    neutral: number;
+  };
   logs: string[]; // Array of log lines
   file_info?: {
     filename: string;
@@ -146,12 +151,11 @@ const App: React.FC = () => {
 
   const chartData = result 
     ? [
-        { name: 'Threats', value: result.stats.threatsFound },
-        { name: 'Safe', value: Math.max(0, 100 - result.stats.threatsFound) }
-      ]
+        { name: 'Malicious', value: result.stats.malicious || 0 },
+        { name: 'Suspicious', value: result.stats.suspicious || 0 },
+        { name: 'Neutral', value: result.stats.neutral || 0 },
+      ].filter(item => item.value > 0) // Only show categories with values
     : [];
-  
-  const COLORS = ['#FF8042', '#00C49F'];
 
   const LogRow = ({ index, style }: { index: number; style: React.CSSProperties }) => (
     <div style={style} className="px-2">
@@ -174,303 +178,397 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-black via-zinc-900 to-black p-8">
-      <Card className="max-w-5xl mx-auto shadow-2xl bg-zinc-900 border-rust-700/50">
-        <CardHeader className="bg-gradient-to-r from-rust-800 to-rust-900 text-white rounded-t-lg border-b-2 border-rust-600">
-          <div className="flex items-center gap-3">
-            <Shield className="h-8 w-8 text-rust-400" />
-            <CardTitle className="text-3xl font-bold tracking-tight">PEroxide File Scanner</CardTitle>
+
+      <header className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-8 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Shield className="h-8 w-8 text-rust-500" />
+              <h1 className="text-2xl font-bold text-white">PEroxide</h1>
+            </div>
+            <nav className="flex items-center gap-6">
+              <a href="#scanner" className="text-gray-300 hover:text-rust-400 transition-colors">Scanner</a>
+              <a href="#about" className="text-gray-300 hover:text-rust-400 transition-colors">About</a>
+              <a href="#docs" className="text-gray-300 hover:text-rust-400 transition-colors">Documentation</a>
+            </nav>
           </div>
-          <p className="text-rust-200 mt-2 font-mono text-sm">Advanced malware detection and analysis</p>
-        </CardHeader>
-        <CardContent className="pt-6 bg-zinc-900">
-          {!scanId ? (
-            <div>
-              <div
-                {...getRootProps()}
-                className={`border-2 border-dashed rounded-lg p-12 text-center transition-all cursor-pointer ${
-                  isDragActive 
-                    ? 'border-rust-500 bg-rust-950/30 scale-105 shadow-lg shadow-rust-900/50' 
-                    : 'border-rust-800/50 hover:border-rust-600 hover:bg-zinc-800/50 bg-black/40'
-                }`}
-              >
-                <input {...getInputProps()} />
-                <Upload className="mx-auto h-16 w-16 text-rust-500 mb-4" />
-                {isDragActive ? (
-                  <p className="text-lg font-semibold text-rust-400">Drop the file here...</p>
-                ) : (
-                  <>
-                    <p className="text-lg font-semibold text-gray-200 mb-2">
-                      Drag & drop a file here, or click to select
-                    </p>
-                    <p className="text-sm text-gray-500 font-mono">
-                      PE file & shellcode analysis • Max size: 100MB
-                    </p>
-                  </>
+        </div>
+      </header>
+
+      <section className="py-16 px-8">
+        <div className="max-w-4xl mx-auto text-center">
+          <h2 className="text-4xl font-bold text-white mb-4">
+            Advanced Malware Detection
+          </h2>
+          <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
+            Scan PE files with real-time scanning progress.
+          </p>
+          <div className="flex justify-center gap-4 mb-8">
+            <Badge className="bg-rust-900 text-rust-300">PE File Analysis</Badge>
+            <Badge className="bg-rust-900 text-rust-300">Real-time Scanning</Badge>
+          </div>
+        </div>
+      </section>
+
+      <main className="px-8 pb-16">
+  <div className="max-w-7xl mx-auto">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <aside className="lg:col-span-2 space-y-6">
+        <Card className="bg-zinc-900 border-rust-700/50">
+          <CardHeader>
+            <CardTitle className="text-rust-400">Recent Scans</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div className="text-sm text-gray-400">No recent scans</div>
+            </div>
+          </CardContent>
+        </Card>
+
+      </aside>
+      
+      <div className="lg:col-span-8 lg:col-start-3">
+        <Card className="shadow-2xl bg-zinc-900 border-rust-700/50">
+          <CardHeader className="bg-gradient-to-r from-rust-800 to-rust-900 text-white rounded-t-lg border-b-2 border-rust-600">
+            <div className="flex items-center justify-center gap-3">
+              <Shield className="h-8 w-8 text-rust-400" />
+              <CardTitle className="text-3xl font-bold tracking-tight">PEroxide File Scanner</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-6 bg-zinc-900">
+            {!scanId ? (
+              <div>
+                <div
+                  {...getRootProps()}
+                  className={`border-2 border-dashed rounded-lg p-12 text-center transition-all cursor-pointer ${
+                    isDragActive 
+                      ? 'border-rust-500 bg-rust-950/30 scale-105 shadow-lg shadow-rust-900/50' 
+                      : 'border-rust-800/50 hover:border-rust-600 hover:bg-zinc-800/50 bg-black/40'
+                  }`}
+                >
+                  <input {...getInputProps()} />
+                  <Upload className="mx-auto h-16 w-16 text-rust-500 mb-4" />
+                  {isDragActive ? (
+                    <p className="text-lg font-semibold text-rust-400">Drop the file here...</p>
+                  ) : (
+                    <>
+                      <p className="text-lg font-semibold text-gray-200 mb-2">
+                        Drag & drop a file here, or click to select
+                      </p>
+                      <p className="text-sm text-gray-500 font-mono">
+                        PE file analysis • Max size: 100MB
+                      </p>
+                    </>
+                  )}
+                </div>
+                {errorMessage && (
+                  <div className="mt-6 bg-red-950/50 p-4 rounded-lg border-2 border-red-800">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="h-6 w-6 text-red-400 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <h3 className="text-lg font-semibold text-red-400 mb-1 font-mono">Upload Rejected</h3>
+                        <p className="text-red-300 font-mono text-sm mb-2">{errorMessage}</p>
+                        {uploadedFile && (
+                          <div className="text-xs text-red-400/80 font-mono mt-2 bg-red-950/30 p-2 rounded">
+                            <p>File: {uploadedFile.name}</p>
+                            <p>Size: {(uploadedFile.size / (1024 * 1024)).toFixed(2)} MB</p>
+                          </div>
+                        )}
+                        <Button 
+                          onClick={() => {
+                            setErrorMessage(null);
+                            setUploadedFile(null);
+                          }} 
+                          className="mt-3 bg-red-800 hover:bg-red-700 text-white font-mono text-sm"
+                        >
+                          Try Another File
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {isUploading && !errorMessage && (
+                  <div className="mt-6 bg-zinc-800/50 p-4 rounded-lg border border-rust-800/30">
+                    <div className="flex justify-between mb-2">
+                      <span className="text-sm font-medium text-rust-400 font-mono">Uploading...</span>
+                      <span className="text-sm font-medium text-rust-400 font-mono">{Math.round(uploadProgress)}%</span>
+                    </div>
+                    <Progress value={uploadProgress} className="h-3" />
+                    {uploadedFile && (
+                      <div className="text-xs text-rust-400/80 font-mono mt-2">
+                        <p>File: {uploadedFile.name}</p>
+                        <p>Size: {(uploadedFile.size / (1024 * 1024)).toFixed(2)} MB</p>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
-              {errorMessage && (
-                <div className="mt-6 bg-red-950/50 p-4 rounded-lg border-2 border-red-800">
-                  <div className="flex items-start gap-3">
-                    <AlertTriangle className="h-6 w-6 text-red-400 flex-shrink-0 mt-0.5" />
-                    <div className="flex-1">
-                      <h3 className="text-lg font-semibold text-red-400 mb-1 font-mono">Upload Rejected</h3>
-                      <p className="text-red-300 font-mono text-sm mb-2">{errorMessage}</p>
-                      {uploadedFile && (
-                        <div className="text-xs text-red-400/80 font-mono mt-2 bg-red-950/30 p-2 rounded">
-                          <p>File: {uploadedFile.name}</p>
-                          <p>Size: {(uploadedFile.size / (1024 * 1024)).toFixed(2)} MB</p>
-                        </div>
-                      )}
-                      <Button 
-                        onClick={() => {
-                          setErrorMessage(null);
-                          setUploadedFile(null);
-                        }} 
-                        className="mt-3 bg-red-800 hover:bg-red-700 text-white font-mono text-sm"
-                      >
-                        Try Another File
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              )}
-              {isUploading && !errorMessage && (
-                <div className="mt-6 bg-zinc-800/50 p-4 rounded-lg border border-rust-800/30">
-                  <div className="flex justify-between mb-2">
-                    <span className="text-sm font-medium text-rust-400 font-mono">Uploading...</span>
-                    <span className="text-sm font-medium text-rust-400 font-mono">{Math.round(uploadProgress)}%</span>
-                  </div>
-                  <Progress value={uploadProgress} className="h-3" />
-                  {uploadedFile && (
-                    <div className="text-xs text-rust-400/80 font-mono mt-2">
-                      <p>File: {uploadedFile.name}</p>
-                      <p>Size: {(uploadedFile.size / (1024 * 1024)).toFixed(2)} MB</p>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          ) : progress < 100 ? (
-            <div className="space-y-6">
-              {uploadedFile && (
-                <div className="bg-zinc-800/50 p-4 rounded-lg border border-rust-800/30">
-                  <h4 className="text-sm font-semibold text-rust-400 mb-2 font-mono">File Information</h4>
-                  <div className="text-sm text-gray-300 font-mono space-y-1">
-                    <p><span className="text-rust-500">Name:</span> {uploadedFile.name}</p>
-                    <p><span className="text-rust-500">Size:</span> {(uploadedFile.size / (1024 * 1024)).toFixed(2)} MB ({uploadedFile.size.toLocaleString()} bytes)</p>
-                  </div>
-                </div>
-              )}
-              <div className="bg-zinc-800/50 p-6 rounded-lg border border-rust-800/30">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-xl font-semibold text-rust-400 font-mono">Scanning in Progress</h3>
-                  <Badge variant="secondary" className="text-sm px-3 py-1 bg-rust-900 text-rust-300 border-rust-700 font-mono">
-                    {Math.round(progress)}%
-                  </Badge>
-                </div>
-                <Progress value={progress} className="h-4 mb-3" />
-                <p className="text-gray-300 font-medium font-mono text-sm">{message}</p>
-              </div>
-              
-              <div>
-                <h4 className="text-sm font-semibold text-rust-400 mb-2 flex items-center gap-2 font-mono">
-                  <FileText className="h-4 w-4" />
-                  Scan Logs
-                </h4>
-                <div className="bg-black rounded-lg overflow-hidden border-2 border-rust-900/50 shadow-inner">
-                  {logs.length > 0 ? (
-                    <List 
-                      height={240} 
-                      itemCount={logs.length} 
-                      itemSize={32} 
-                      width="100%"
-                    >
-                      {LogRow}
-                    </List>
-                  ) : (
-                    <div className="p-4 text-rust-600 text-sm font-mono">Waiting for scan to start...</div>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : result ? (
-            result.status === 'scanning' ? (
-              // Show loading state while scanning
+            ) : progress < 100 ? (
               <div className="space-y-6">
-                {(result.file_info || uploadedFile) && (
+                {uploadedFile && (
                   <div className="bg-zinc-800/50 p-4 rounded-lg border border-rust-800/30">
                     <h4 className="text-sm font-semibold text-rust-400 mb-2 font-mono">File Information</h4>
                     <div className="text-sm text-gray-300 font-mono space-y-1">
-                      <p><span className="text-rust-500">Name:</span> {result.file_info?.filename || uploadedFile?.name}</p>
-                      <p><span className="text-rust-500">Size:</span> {((result.file_info?.size || uploadedFile?.size || 0) / (1024 * 1024)).toFixed(2)} MB ({(result.file_info?.size || uploadedFile?.size || 0).toLocaleString()} bytes)</p>
+                      <p><span className="text-rust-500">Name:</span> {uploadedFile.name}</p>
+                      <p><span className="text-rust-500">Size:</span> {(uploadedFile.size / (1024 * 1024)).toFixed(2)} MB ({uploadedFile.size.toLocaleString()} bytes)</p>
                     </div>
                   </div>
                 )}
                 <div className="bg-zinc-800/50 p-6 rounded-lg border border-rust-800/30">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-xl font-semibold text-rust-400 font-mono flex items-center gap-2">
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-rust-400"></div>
-                      Analyzing File...
-                    </h3>
-                    <Badge variant="secondary" className="text-sm px-3 py-1 bg-rust-900 text-rust-300 border-rust-700 font-mono animate-pulse">
-                      SCANNING
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-xl font-semibold text-rust-400 font-mono">Scanning in Progress</h3>
+                    <Badge variant="secondary" className="text-sm px-3 py-1 bg-rust-900 text-rust-300 border-rust-700 font-mono">
+                      {Math.round(progress)}%
                     </Badge>
                   </div>
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3 text-sm text-gray-400 font-mono">
-                      <div className="w-2 h-2 bg-rust-500 rounded-full animate-pulse"></div>
-                      <span>Deep analysis in progress...</span>
-                    </div>
-                    <div className="flex items-center gap-3 text-sm text-gray-400 font-mono">
-                      <div className="w-2 h-2 bg-rust-500 rounded-full animate-pulse" style={{animationDelay: '0.2s'}}></div>
-                      <span>Checking threat signatures...</span>
-                    </div>
-                    <div className="flex items-center gap-3 text-sm text-gray-400 font-mono">
-                      <div className="w-2 h-2 bg-rust-500 rounded-full animate-pulse" style={{animationDelay: '0.4s'}}></div>
-                      <span>Finalizing results...</span>
-                    </div>
-                  </div>
-                  <div className="mt-4 bg-black/40 rounded p-3 border border-rust-900/50">
-                    <div className="flex items-center justify-between text-xs text-rust-500 font-mono mb-2">
-                      <span>Analysis Progress</span>
-                      <span className="animate-pulse">Processing...</span>
-                    </div>
-                    <div className="w-full bg-zinc-900 rounded-full h-2 overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-rust-600 to-rust-400 rounded-full animate-progress-fill"
-                      ></div>
-                    </div>
+                  <Progress value={progress} className="h-4 mb-3" />
+                  <p className="text-gray-300 font-medium font-mono text-sm">{message}</p>
+                </div>
+                
+                <div>
+                  <h4 className="text-sm font-semibold text-rust-400 mb-2 flex items-center gap-2 font-mono">
+                    <FileText className="h-4 w-4" />
+                    Scan Logs
+                  </h4>
+                  <div className="bg-black rounded-lg overflow-hidden border-2 border-rust-900/50 shadow-inner">
+                    {logs.length > 0 ? (
+                      <List 
+                        height={240} 
+                        itemCount={logs.length} 
+                        itemSize={32} 
+                        width="100%"
+                      >
+                        {LogRow}
+                      </List>
+                    ) : (
+                      <div className="p-4 text-rust-600 text-sm font-mono">Waiting for scan to start...</div>
+                    )}
                   </div>
                 </div>
               </div>
+            ) : result ? (
+              result.status === 'scanning' ? (
+                <div className="space-y-6">
+                  {(result.file_info || uploadedFile) && (
+                    <div className="bg-zinc-800/50 p-4 rounded-lg border border-rust-800/30">
+                      <h4 className="text-sm font-semibold text-rust-400 mb-2 font-mono">File Information</h4>
+                      <div className="text-sm text-gray-300 font-mono space-y-1">
+                        <p><span className="text-rust-500">Name:</span> {result.file_info?.filename || uploadedFile?.name}</p>
+                        <p><span className="text-rust-500">Size:</span> {((result.file_info?.size || uploadedFile?.size || 0) / (1024 * 1024)).toFixed(2)} MB ({(result.file_info?.size || uploadedFile?.size || 0).toLocaleString()} bytes)</p>
+                      </div>
+                    </div>
+                  )}
+                  <div className="bg-zinc-800/50 p-6 rounded-lg border border-rust-800/30">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-xl font-semibold text-rust-400 font-mono flex items-center gap-2">
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-rust-400"></div>
+                        Scanning in Progress
+                      </h3>
+                      <Badge variant="secondary" className="text-sm px-3 py-1 bg-rust-900 text-rust-300 border-rust-700 font-mono animate-pulse">
+                        SCANNING
+                      </Badge>
+                    </div>
+                    <div className="space-y-3 mb-4">
+                      <p className="text-gray-300 font-medium font-mono text-sm">{message || 'Waiting for scan to start...'}</p>
+                    </div>
+                    <div className="mt-4 bg-black/40 rounded p-3 border border-rust-900/50">
+                      <div className="flex items-center justify-between text-xs text-rust-500 font-mono mb-2">
+                        <span>Analysis Progress</span>
+                        <span>{Math.round(progress)}%</span>
+                      </div>
+                      <div className="w-full bg-zinc-900 rounded-full h-2 overflow-hidden">
+                        <div 
+                          className="h-full bg-gradient-to-r from-rust-600 to-rust-400 rounded-full"
+                          style={{ width: `${progress}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  </div>
+                  </div>
+              ) : (
+                <div className="space-y-6">
+                  {(result.file_info || uploadedFile) && (
+                    <div className="bg-zinc-800/50 p-4 rounded-lg border border-rust-800/30">
+                      <h4 className="text-sm font-semibold text-rust-400 mb-2 font-mono">Scanned File</h4>
+                      <div className="text-sm text-gray-300 font-mono space-y-1">
+                        <p><span className="text-rust-500">Name:</span> {result.file_info?.filename || uploadedFile?.name}</p>
+                        <p><span className="text-rust-500">Size:</span> {((result.file_info?.size || uploadedFile?.size || 0) / (1024 * 1024)).toFixed(2)} MB ({(result.file_info?.size || uploadedFile?.size || 0).toLocaleString()} bytes)</p>
+                        {result.file_info?.sha256 && (
+                          <p><span className="text-rust-500">SHA256:</span> <span className="text-xs break-all">{result.file_info.sha256}</span></p>
+                        )}
+                        <p><span className="text-rust-500">Status:</span> <span className={
+                          result.status === 'safe' ? 'text-emerald-400' : 
+                          result.status === 'unsafe' ? 'text-red-400' : 
+                          'text-yellow-400'
+                        }>
+                          {result.status === 'safe' ? 'Clean - No threats detected' : 
+                          result.status === 'unsafe' ? 'Threats detected' : 
+                          result.status === 'suspicious' ? 'Suspicious' :
+                          result.status}
+                        </span></p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between bg-zinc-800/50 p-4 rounded-lg border border-rust-800/30">
+                    <h3 className="text-2xl font-bold text-rust-400 font-mono">Scan Complete</h3>
+                    <Badge 
+                      variant={result.status === 'safe' ? 'default' : result.status === 'unsafe' ? 'destructive' : 'secondary'}
+                      className={`text-lg px-4 py-2 font-mono ${
+                        result.status === 'safe' 
+                          ? 'bg-emerald-900 text-emerald-300 border-emerald-700' 
+                          : result.status === 'unsafe'
+                          ? 'bg-red-900 text-red-300 border-red-700'
+                          : 'bg-yellow-900 text-yellow-300 border-yellow-700'
+                      }`}
+                    >
+                      {result.status === 'safe' ? '✓ SAFE' : 
+                      result.status === 'unsafe' ? '⚠ THREATS DETECTED' :
+                      result.status === 'suspicious' ? '⚠ SUSPICIOUS' :
+                      `STATUS: ${(result.status as string).toUpperCase()}`}
+                    </Badge>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <Card className="shadow-lg bg-zinc-800/50 border-rust-800/30">
+                      <CardHeader className="border-b border-rust-900/30">
+                        <CardTitle className="text-lg text-rust-400 font-mono">Threat Statistics</CardTitle>
+                      </CardHeader>
+                      <CardContent className="flex justify-center bg-black/20">
+                      {chartData.length > 0 ? (
+                          <PieChart width={280} height={280}>
+                            <Pie
+                              data={chartData}
+                              dataKey="value"
+                              nameKey="name"
+                              cx="50%"
+                              cy="50%"
+                              outerRadius={100}
+                              fill="#8884d8"
+                              label
+                            >
+                              {chartData.map((item) => {
+                                const colorMap: { [key: string]: string } = {
+                                  'Malicious': '#DC2626',
+                                  'Suspicious': '#FCD34D',
+                                  'Neutral': '#6B7280'
+                                };
+                                return <Cell key={`cell-${item.name}`} fill={colorMap[item.name] || '#8884d8'} />;
+                              })}
+                            </Pie>
+                            <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #78350f', color: '#fbbf24' }} />
+                            <Legend wrapperStyle={{ color: '#d1d5db' }} />
+                          </PieChart>
+                        ) : result && result.stats.threatsFound > 0 ? (
+                          <div className="flex flex-col items-center justify-center h-64 text-yellow-500">
+                            <Shield className="h-24 w-24 mb-4" />
+                            <p className="text-xl font-semibold font-mono">Threats detected but severity data unavailable</p>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center h-64 text-emerald-500">
+                            <Shield className="h-24 w-24 mb-4" />
+                            <p className="text-xl font-semibold font-mono">No Threats Detected</p>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    <Card className="shadow-lg bg-zinc-800/50 border-rust-800/30">
+                      <CardHeader className="border-b border-rust-900/30">
+                        <CardTitle className="text-lg text-rust-400 font-mono">Threat Details</CardTitle>
+                      </CardHeader>
+                      <CardContent className="bg-black/20">
+                        {result.threats.length > 0 ? (
+                          <Table>
+                            <TableHeader>
+                              <TableRow className="border-rust-900/30 hover:bg-zinc-800/50">
+                                <TableHead className="text-rust-500 font-mono">Type</TableHead>
+                                <TableHead className="text-rust-500 font-mono">Details</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {result.threats.map((threat, idx) => (
+                                <TableRow key={idx} className="border-rust-900/30 hover:bg-zinc-800/50">
+                                  <TableCell>
+                                    <Badge variant="outline" className="flex items-center gap-1 w-fit bg-red-950/50 text-red-400 border-red-800 font-mono">
+                                      <AlertTriangle className="h-3 w-3" />
+                                      {threat.type}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-sm text-gray-300 font-mono">{threat.details}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        ) : (
+                          <div className="text-center py-8 text-emerald-500">
+                            <p className="text-lg font-mono">✓ No threats found in this file</p>
+                            <p className="text-sm mt-2 text-gray-400 font-mono">The file appears to be safe</p>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+             
+                  <div className="flex gap-3">
+                    <Button className="flex items-center gap-2 bg-rust-700 hover:bg-rust-600 text-white border-rust-600 font-mono">
+                      <FileText className="h-4 w-4" /> 
+                      Export Report
+                    </Button>
+                    <Button variant="outline" onClick={resetScanner} className="border-rust-800/50 text-gray-400 hover:bg-zinc-800/50 hover:text-gray-300 hover:border-rust-700 font-mono">
+                      Scan Another File
+                    </Button>
+                  </div>
+                </div>
+              )
             ) : (
-              // Show final results
-              <div className="space-y-6">
-                {(result.file_info || uploadedFile) && (
-                  <div className="bg-zinc-800/50 p-4 rounded-lg border border-rust-800/30">
-                    <h4 className="text-sm font-semibold text-rust-400 mb-2 font-mono">Scanned File</h4>
-                    <div className="text-sm text-gray-300 font-mono space-y-1">
-                      <p><span className="text-rust-500">Name:</span> {result.file_info?.filename || uploadedFile?.name}</p>
-                      <p><span className="text-rust-500">Size:</span> {((result.file_info?.size || uploadedFile?.size || 0) / (1024 * 1024)).toFixed(2)} MB ({(result.file_info?.size || uploadedFile?.size || 0).toLocaleString()} bytes)</p>
-                      {result.file_info?.sha256 && (
-                        <p><span className="text-rust-500">SHA256:</span> <span className="text-xs break-all">{result.file_info.sha256}</span></p>
-                      )}
-                      <p><span className="text-rust-500">Status:</span> <span className={result.status === 'safe' ? 'text-emerald-400' : 'text-red-400'}>
-                        {result.status === 'safe' ? 'Clean - No threats detected' : 
-                         result.status === 'unsafe' ? 'Threats detected' : 
-                         result.status}
-                      </span></p>
-                    </div>
-                  </div>
-                )}
-                <div className="flex items-center justify-between bg-zinc-800/50 p-4 rounded-lg border border-rust-800/30">
-                  <h3 className="text-2xl font-bold text-rust-400 font-mono">Scan Complete</h3>
-                  <Badge 
-                    variant={result.status === 'safe' ? 'default' : 'destructive'}
-                    className={`text-lg px-4 py-2 font-mono ${
-                      result.status === 'safe' 
-                        ? 'bg-emerald-900 text-emerald-300 border-emerald-700' 
-                        : 'bg-red-900 text-red-300 border-red-700'
-                    }`}
-                  >
-                    {result.status === 'safe' ? '✓ SAFE' : 
-                     result.status === 'unsafe' ? '⚠ THREATS DETECTED' :
-                     `STATUS: ${result.status.toUpperCase()}`}
-                  </Badge>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Card className="shadow-lg bg-zinc-800/50 border-rust-800/30">
-                  <CardHeader className="border-b border-rust-900/30">
-                    <CardTitle className="text-lg text-rust-400 font-mono">Threat Statistics</CardTitle>
-                  </CardHeader>
-                  <CardContent className="flex justify-center bg-black/20">
-                    {chartData.length > 0 && chartData[0].value > 0 ? (
-                      <PieChart width={280} height={280}>
-                        <Pie 
-                          data={chartData} 
-                          dataKey="value" 
-                          nameKey="name" 
-                          cx="50%" 
-                          cy="50%" 
-                          outerRadius={100} 
-                          fill="#8884d8" 
-                          label
-                        >
-                          {chartData.map((_, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #78350f', color: '#fbbf24' }} />
-                        <Legend wrapperStyle={{ color: '#d1d5db' }} />
-                      </PieChart>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center h-64 text-emerald-500">
-                        <Shield className="h-24 w-24 mb-4" />
-                        <p className="text-xl font-semibold font-mono">No Threats Detected</p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card className="shadow-lg bg-zinc-800/50 border-rust-800/30">
-                  <CardHeader className="border-b border-rust-900/30">
-                    <CardTitle className="text-lg text-rust-400 font-mono">Threat Details</CardTitle>
-                  </CardHeader>
-                  <CardContent className="bg-black/20">
-                    {result.threats.length > 0 ? (
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="border-rust-900/30 hover:bg-zinc-800/50">
-                            <TableHead className="text-rust-500 font-mono">Type</TableHead>
-                            <TableHead className="text-rust-500 font-mono">Details</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {result.threats.map((threat, idx) => (
-                            <TableRow key={idx} className="border-rust-900/30 hover:bg-zinc-800/50">
-                              <TableCell>
-                                <Badge variant="outline" className="flex items-center gap-1 w-fit bg-red-950/50 text-red-400 border-red-800 font-mono">
-                                  <AlertTriangle className="h-3 w-3" /> 
-                                  {threat.type}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-sm text-gray-300 font-mono">{threat.details}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    ) : (
-                      <div className="text-center py-8 text-emerald-500">
-                        <p className="text-lg font-mono">✓ No threats found in this file</p>
-                        <p className="text-sm mt-2 text-gray-400 font-mono">The file appears to be safe</p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
+              <div className="text-center py-12 text-rust-600">
+                <p className="font-mono">Loading scan results...</p>
               </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  </div>
+</main>
 
-              <div className="flex gap-3">
-                <Button className="flex items-center gap-2 bg-rust-700 hover:bg-rust-600 text-white border-rust-600 font-mono">
-                  <FileText className="h-4 w-4" /> 
-                  Export Report
-                </Button>
-                <Button variant="outline" onClick={resetScanner} className="border-rust-700 text-rust-400 hover:bg-rust-950/30 hover:text-rust-300 font-mono">
-                  Scan Another File
-                </Button>
+
+      <footer className="border-t border-zinc-800 bg-zinc-950/50">
+        <div className="max-w-7xl mx-auto px-8 py-12">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <Shield className="h-6 w-6 text-rust-500" />
+                <span className="font-bold text-white">PEroxide</span>
               </div>
+              <p className="text-gray-400 text-sm">
+                Advanced malware detection for PE files.
+              </p>
             </div>
-            )
-          ) : (
-            <div className="text-center py-12 text-rust-600">
-              <p className="font-mono">Loading scan results...</p>
+            <div>
+              <h3 className="font-semibold text-white mb-4">Resources</h3>
+              <ul className="space-y-2 text-sm">
+                <li><a href="#" className="text-gray-400 hover:text-rust-400">Documentation</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-rust-400">API Reference</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-rust-400">Security</a></li>
+              </ul>
             </div>
-          )}
-        </CardContent>
-      </Card>
+            <div>
+              <h3 className="font-semibold text-white mb-4">Support</h3>
+              <ul className="space-y-2 text-sm">
+                <li><a href="#" className="text-gray-400 hover:text-rust-400">GitHub</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-rust-400">Issues</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-rust-400">Contact</a></li>
+              </ul>
+            </div>
+          </div>
+          <div className="border-t border-zinc-800 mt-8 pt-8 text-center text-sm text-gray-500">
+            <p>© 2024 PEroxide. Built with Rust and React.</p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 };
-
 export default App;
-
