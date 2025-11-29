@@ -9,14 +9,13 @@ interface ScanStore {
   setMessage: (message: string) => void;
 }
 
-const useScanStore = create<ScanStore>((set) => ({
+const useScanStore = create<ScanStore>(set => ({
   scanId: null,
-  setScanId: (id) => set({ scanId: id }),
+  setScanId: id => set({ scanId: id }),
   progress: 0,
-  setProgress: (progress) => set({ progress }),
+  setProgress: progress => set({ progress }),
   message: '',
-  setMessage: (message) => set({ message }),
+  setMessage: message => set({ message }),
 }));
 
 export default useScanStore;
-
